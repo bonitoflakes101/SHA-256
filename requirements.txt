@@ -1,0 +1,21 @@
+# ESHA-256 Thesis - Python Dependencies
+# ======================================
+
+# Core cryptography libraries
+pycryptodome>=3.19.0      # RSA-PSS implementation
+
+# Numerical and statistical analysis
+numpy>=1.24.0             # Numerical operations
+scipy>=1.10.0             # Statistical functions
+
+# Data visualization
+matplotlib>=3.7.0         # Plotting and graphs
+
+# Testing framework
+pytest>=7.4.0             # Unit testing
+pytest-cov>=4.1.0         # Code coverage
+
+# Development tools
+black>=23.0.0             # Code formatting
+flake8>=6.0.0             # Linting
+mypy>=1.5.0               # Type checking
