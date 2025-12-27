@@ -1,0 +1,18 @@
+Performance Benchmarking Summary
+==================================================
+Date: 2025-12-27 20:35:21
+Iterations: 10000
+Message Size: 1024 bytes
+
+SHA-256:
+  Throughput: 501.62 ops/sec
+  Latency: 1.9936 ms
+  Memory: 458 bytes
+
+ESHA-256 (masked):
+  Throughput: 452.58 ops/sec
+  Latency: 2.2095 ms
+  Memory: 643 bytes
+
+Throughput Difference: -9.77%
+Memory Difference: +40.39%

@@ -106,19 +106,21 @@ class ESHA256:
         message += struct.pack('>Q', msg_len * 8)
         return message
     
-    def _haifa_inject(self, W: List[int]) -> None:
+    def _haifa_inject(self, W: List[int], is_final: bool = False) -> None:
         """
         ENHANCEMENT 1A: HAIFA Framework Injection
         
-        Inject bitcount and salt into message schedule to prevent
+        Inject bitcount, salt, and final flag into message schedule to prevent
         length-extension attacks.
         
-        This makes each block position-dependent:
+        This makes each block position-dependent AND marks final blocks specially:
         - Same message block at different positions → different hash
-        - Attacker cannot extend without knowing exact bitcount
+        - Attacker cannot extend because final flag changes internal state
+        - Even if attacker knows bitcount, they can't replicate final processing
         
         Args:
             W: Message schedule (modified in-place)
+            is_final: True if this is the last block (prevents length extension)
         """
         # Inject bitcount (high 32 bits, low 32 bits)
         W[0] ^= (self.bitcount >> 32) & 0xFFFFFFFF
@@ -127,8 +129,16 @@ class ESHA256:
         # Inject salt (domain separation)
         W[14] ^= self.SALT[0] ^ self.SALT[2]
         W[15] ^= self.SALT[1] ^ self.SALT[3]
+        
+        # CRITICAL: Final block flag - this is what prevents length extension!
+        # When is_final=True, we XOR a special marker into the state
+        # An attacker continuing from a hash cannot replicate this because
+        # they don't know if their block should be "final" or not
+        if is_final:
+            W[2] ^= 0x80000000  # Set high bit to mark final block
+            W[13] ^= 0x80000000  # Additional final marker for security
     
-    def _multi_lane_schedule(self, block: bytes) -> List[int]:
+    def _multi_lane_schedule(self, block: bytes, is_final: bool = False) -> List[int]:
         """
         ENHANCEMENT 1B: Multi-Lane Message Schedule
         
@@ -150,6 +160,7 @@ class ESHA256:
         
         Args:
             block: 512-bit message block
+            is_final: True if this is the final block
             
         Returns:
             List of 64 32-bit words (interleaved lanes)
@@ -157,8 +168,8 @@ class ESHA256:
         # Parse block into 16 32-bit words
         words = list(struct.unpack('>16I', block))
         
-        # HAIFA injection
-        self._haifa_inject(words)
+        # HAIFA injection with final flag
+        self._haifa_inject(words, is_final=is_final)
         
         # Distribute into 4 lanes (each lane gets every 4th word)
         lane_A = [words[0], words[4], words[8], words[12]]
@@ -267,12 +278,18 @@ class ESHA256:
         # Pad message
         padded = self._pad_message(message)
         
+        # Calculate total blocks for final flag detection
+        total_blocks = len(padded) // 64
+        
         # Process each 512-bit block
-        for i in range(0, len(padded), 64):
+        for block_num, i in enumerate(range(0, len(padded), 64)):
             block = padded[i:i+64]
             
+            # Determine if this is the final block
+            is_final = (block_num == total_blocks - 1)
+            
             # ENHANCEMENT 1: Multi-lane message schedule with HAIFA
-            W = self._multi_lane_schedule(block)
+            W = self._multi_lane_schedule(block, is_final=is_final)
             
             # ENHANCEMENT 2: Masked compression
             self._compress(W)

@@ -1,0 +1,10 @@
+Length-Extension Attack Test Summary
+==================================================
+Date: 2025-12-27 20:33:19
+Iterations: 1000
+
+Results:
+  SHA-256:  1000/1000 (100.0%) - VULNERABLE
+  ESHA-256: 0/1000 (0.0%) - PROTECTED
+
+Conclusion: HAIFA framework prevents length-extension attacks

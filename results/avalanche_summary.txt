@@ -1,0 +1,16 @@
+Avalanche Effect Analysis Summary
+==================================================
+Date: 2025-12-27 20:33:50
+Iterations: 10000
+
+SHA-256:
+  Mean: 128.08 bits (50.03%)
+  Std Dev: 7.97
+  Range: 98-157
+
+ESHA-256:
+  Mean: 128.12 bits (50.05%)
+  Std Dev: 8.10
+  Range: 98-157
+
+Improvement: +0.02%
