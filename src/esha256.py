@@ -7,13 +7,46 @@ This module implements ESHA-256 (Enhanced SHA-256) with three key enhancements:
 2. Multi-Lane Message Schedule - Improves collision resistance and enables SIMD
 3. Boolean Masking - Provides SASCA (side-channel attack) protection
 
+Optional SIMD acceleration is available when the esha256_simd C extension is built.
+See build.sh for compilation instructions.
+
 Author: ESHA-256 Thesis Project
-Date: December 2025
+Date: December 2025 (SIMD support added January 2026)
 """
 
 import struct
 import secrets
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+
+# ============================================================================
+# SIMD Extension Detection
+# ============================================================================
+
+# Try to import SIMD extension (built from src/c_extension/)
+try:
+    import esha256_simd as _simd_module
+    _HAS_SIMD_EXTENSION = True
+    _SIMD_AVAILABLE = _simd_module.has_simd_support()
+    _SIMD_TYPE = _simd_module.get_simd_type()
+except ImportError:
+    _simd_module = None
+    _HAS_SIMD_EXTENSION = False
+    _SIMD_AVAILABLE = False
+    _SIMD_TYPE = "Not installed"
+
+
+def get_simd_info() -> dict:
+    """
+    Get information about SIMD support.
+    
+    Returns:
+        Dict with 'extension_installed', 'simd_available', and 'simd_type' keys
+    """
+    return {
+        'extension_installed': _HAS_SIMD_EXTENSION,
+        'simd_available': _SIMD_AVAILABLE,
+        'simd_type': _SIMD_TYPE
+    }
 
 
 class ESHA256:
@@ -24,6 +57,11 @@ class ESHA256:
     - HAIFA framework (bitcount + salt) for length-extension immunity
     - Multi-lane message schedule for better collision resistance
     - Boolean masking for side-channel protection
+    - Optional SIMD acceleration for multi-lane schedule (ARM NEON / Intel AVX2)
+    
+    Args:
+        use_masking: Enable boolean masking for SASCA protection (default: True)
+        use_simd: Enable SIMD acceleration if available (default: True)
     """
     
     # Initial hash values (same as SHA-256)
@@ -47,15 +85,23 @@ class ESHA256:
     # HAIFA salt (domain separation: "ESHA-256" + padding + version)
     SALT = [0x45534841, 0x2D323536, 0x00000000, 0x00000001]  # "ESHA", "-256", padding, v1
     
-    def __init__(self, use_masking: bool = True):
+    def __init__(self, use_masking: bool = True, use_simd: bool = True):
         """
         Initialize ESHA-256 hasher.
         
         Args:
             use_masking: Enable boolean masking for SASCA protection (default: True)
+            use_simd: Enable SIMD acceleration if available (default: True)
+                      Has no effect if C extension is not built or SIMD not available
         """
         self.use_masking = use_masking
+        self.use_simd = use_simd and _SIMD_AVAILABLE
         self.reset()
+    
+    @property
+    def simd_enabled(self) -> bool:
+        """Check if SIMD is actually being used."""
+        return self.use_simd and _SIMD_AVAILABLE
     
     def reset(self):
         """Reset the hasher state."""
@@ -138,39 +184,16 @@ class ESHA256:
             W[2] ^= 0x80000000  # Set high bit to mark final block
             W[13] ^= 0x80000000  # Additional final marker for security
     
-    def _multi_lane_schedule(self, block: bytes, is_final: bool = False) -> List[int]:
+    def _multi_lane_expand_python(self, words: List[int]) -> List[int]:
         """
-        ENHANCEMENT 1B: Multi-Lane Message Schedule
-        
-        Instead of sequential expansion (W[t] depends on W[t-1]),
-        use 4 parallel lanes that can be computed independently.
-        
-        Benefits:
-        - Better collision resistance (4 synchronized differential paths needed)
-        - SIMD parallelization (4-way vectorization possible)
-        - Improved diffusion
-        
-        Structure:
-        Lane_A[t] = f(Lane_A[t-4], Lane_B[t-4], Lane_C[t-4], Lane_D[t-4])
-        Lane_B[t] = f(Lane_B[t-4], Lane_A[t-4], Lane_C[t-4], Lane_D[t-4])
-        Lane_C[t] = f(Lane_C[t-4], Lane_B[t-4], Lane_D[t-4], Lane_A[t-4])
-        Lane_D[t] = f(Lane_D[t-4], Lane_C[t-4], Lane_A[t-4], Lane_B[t-4])
-        
-        All 4 lanes can be computed in parallel!
+        Pure Python multi-lane expansion (fallback when SIMD not available).
         
         Args:
-            block: 512-bit message block
-            is_final: True if this is the final block
+            words: 16 input words (after HAIFA injection)
             
         Returns:
-            List of 64 32-bit words (interleaved lanes)
+            64 expanded words (interleaved lanes)
         """
-        # Parse block into 16 32-bit words
-        words = list(struct.unpack('>16I', block))
-        
-        # HAIFA injection with final flag
-        self._haifa_inject(words, is_final=is_final)
-        
         # Distribute into 4 lanes (each lane gets every 4th word)
         lane_A = [words[0], words[4], words[8], words[12]]
         lane_B = [words[1], words[5], words[9], words[13]]
@@ -201,6 +224,58 @@ class ESHA256:
             W.append(lane_D[t])
         
         return W
+    
+    def _multi_lane_expand_simd(self, words: List[int]) -> List[int]:
+        """
+        SIMD-accelerated multi-lane expansion using C extension.
+        
+        Args:
+            words: 16 input words (after HAIFA injection)
+            
+        Returns:
+            64 expanded words (interleaved lanes)
+        """
+        # Call C extension - it takes 16 words and returns 64
+        return _simd_module.multi_lane_schedule_simd(words)
+    
+    def _multi_lane_schedule(self, block: bytes, is_final: bool = False) -> List[int]:
+        """
+        ENHANCEMENT 1B: Multi-Lane Message Schedule
+        
+        Instead of sequential expansion (W[t] depends on W[t-1]),
+        use 4 parallel lanes that can be computed independently.
+        
+        Benefits:
+        - Better collision resistance (4 synchronized differential paths needed)
+        - SIMD parallelization (4-way vectorization possible)
+        - Improved diffusion
+        
+        Structure:
+        Lane_A[t] = f(Lane_A[t-4], Lane_B[t-4], Lane_C[t-4], Lane_D[t-4])
+        Lane_B[t] = f(Lane_B[t-4], Lane_A[t-4], Lane_C[t-4], Lane_D[t-4])
+        Lane_C[t] = f(Lane_C[t-4], Lane_B[t-4], Lane_D[t-4], Lane_A[t-4])
+        Lane_D[t] = f(Lane_D[t-4], Lane_C[t-4], Lane_A[t-4], Lane_B[t-4])
+        
+        All 4 lanes can be computed in parallel!
+        
+        Args:
+            block: 512-bit message block
+            is_final: True if this is the final block
+            
+        Returns:
+            List of 64 32-bit words (interleaved lanes)
+        """
+        # Parse block into 16 32-bit words
+        words = list(struct.unpack('>16I', block))
+        
+        # HAIFA injection with final flag (MUST remain in Python for security)
+        self._haifa_inject(words, is_final=is_final)
+        
+        # Multi-lane expansion (SIMD or Python fallback)
+        if self.use_simd and _simd_module is not None:
+            return self._multi_lane_expand_simd(words)
+        else:
+            return self._multi_lane_expand_python(words)
     
     def _compress(self, W: List[int]) -> None:
         """
@@ -315,11 +390,18 @@ class ESHA256:
 
 # Quick test
 if __name__ == "__main__":
-    esha = ESHA256()
-    
-    # Test basic functionality
+    # Print SIMD status
+    simd_info = get_simd_info()
     print("ESHA-256 Test Results:")
     print("=" * 60)
+    print(f"SIMD Extension: {'Installed' if simd_info['extension_installed'] else 'Not installed'}")
+    print(f"SIMD Available: {simd_info['simd_available']}")
+    print(f"SIMD Type: {simd_info['simd_type']}")
+    print("=" * 60)
+    
+    esha = ESHA256()
+    print(f"SIMD Enabled: {esha.simd_enabled}")
+    print()
     
     # Test 1: Empty string
     result = esha.hexdigest(b"")
@@ -358,3 +440,20 @@ if __name__ == "__main__":
     print(f"  Changed 1 input bit → {diff_bits}/256 output bits changed ({avalanche_pct:.1f}%)")
     print(f"  Expected: ~128 bits (50%)")
     print(f"  Result: {'PASS' if 100 <= diff_bits <= 156 else 'FAIL'}")
+    
+    # Test 6: SIMD vs Python consistency (if SIMD available)
+    if simd_info['simd_available']:
+        print("\n" + "=" * 60)
+        print("SIMD vs Python Consistency Test")
+        print("=" * 60)
+        
+        esha_simd = ESHA256(use_masking=False, use_simd=True)
+        esha_python = ESHA256(use_masking=False, use_simd=False)
+        
+        test_msg = b"SIMD consistency test message for ESHA-256"
+        hash_simd = esha_simd.hexdigest(test_msg)
+        hash_python = esha_python.hexdigest(test_msg)
+        
+        print(f"SIMD hash:   {hash_simd}")
+        print(f"Python hash: {hash_python}")
+        print(f"Match: {'PASS' if hash_simd == hash_python else 'FAIL - SIMD PRODUCES DIFFERENT OUTPUT!'}")
