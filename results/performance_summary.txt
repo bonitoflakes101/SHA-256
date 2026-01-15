@@ -1,25 +1,25 @@
 Performance Benchmarking Summary
 ==================================================
-Date: 2026-01-05 16:52:57
+Date: 2026-01-15 14:58:37
 Iterations: 10000
 Message Size: 1024 bytes
 SIMD Available: True
 SIMD Type: ARM NEON
 
 SHA-256 (baseline):
-  Throughput: 501.66 ops/sec
-  Latency: 1.9934 ms
+  Throughput: 516.27 ops/sec
+  Latency: 1.9370 ms
   Memory: 470 bytes
 
 ESHA-256 (Python, masked):
-  Throughput: 459.76 ops/sec
-  Latency: 2.1751 ms
-  Memory: 720 bytes
-  vs Baseline: -8.35%
+  Throughput: 462.04 ops/sec
+  Latency: 2.1643 ms
+  Memory: 724 bytes
+  vs Baseline: -10.51%
 
 ESHA-256 (SIMD ARM NEON, masked):
-  Throughput: 654.86 ops/sec
-  Latency: 1.5270 ms
-  Memory: 724 bytes
-  vs Baseline: +30.54%
-  SIMD Speedup: 1.48x
+  Throughput: 699.11 ops/sec
+  Latency: 1.4304 ms
+  Memory: 728 bytes
+  vs Baseline: +35.42%
+  SIMD Speedup: 1.51x

@@ -77,7 +77,7 @@ else:
     print(f"  SIMD: Scalar fallback (unknown platform: {system})")
     extra_compile_args.append('-DNDEBUG')
 
-# Define the extension module
+# Define the extension modules
 esha256_simd = Extension(
     'esha256_simd',
     sources=['esha256_simd.c'],
@@ -87,26 +87,60 @@ esha256_simd = Extension(
     language='c',
 )
 
+# SHA-256 baseline in C for fair comparison
+sha256_baseline = Extension(
+    'sha256_baseline',
+    sources=['sha256_baseline.c'],
+    include_dirs=['.'],
+    extra_compile_args=extra_compile_args,  # Same optimization level!
+    extra_link_args=extra_link_args,
+    language='c',
+)
+
+# ESHA-256 FULL C implementation (for fair comparison)
+esha256_full = Extension(
+    'esha256_full',
+    sources=['esha256_full.c'],
+    include_dirs=['.'],
+    extra_compile_args=extra_compile_args,  # Same optimization level!
+    extra_link_args=extra_link_args,
+    language='c',
+)
+
+# ESHA-256 PARALLEL - hash 4 messages at once!
+esha256_parallel = Extension(
+    'esha256_parallel',
+    sources=['esha256_parallel.c'],
+    include_dirs=['.'],
+    extra_compile_args=extra_compile_args,
+    extra_link_args=extra_link_args,
+    language='c',
+)
+
 # Setup configuration
 setup(
-    name='esha256_simd',
+    name='esha256_extensions',
     version='1.0.0',
-    description='SIMD-optimized message schedule for ESHA-256',
+    description='C extensions for ESHA-256 thesis: SIMD optimization and SHA-256 baseline',
     long_description='''
-SIMD-accelerated multi-lane message schedule expansion for ESHA-256.
+C extensions for fair performance comparison:
 
-Supports:
-- ARM NEON (Apple Silicon M1/M2/M3, ARM64 Linux)
-- Intel AVX2 (Haswell and newer)
-- Intel SSE4.2 (older Intel/AMD fallback)
-- Scalar (portable fallback)
+1. esha256_simd: SIMD-accelerated multi-lane message schedule for ESHA-256
+   - ARM NEON (Apple Silicon M1/M2/M3, ARM64 Linux)
+   - Intel AVX2 (Haswell and newer)
+   - Intel SSE4.2 (older Intel/AMD fallback)
 
-The multi-lane design naturally maps to 128-bit SIMD registers,
-allowing all 4 lanes to be computed in parallel.
+2. sha256_baseline: Standard SHA-256 in optimized C
+   - Same optimization level (-O3)
+   - CANNOT use SIMD for message schedule (sequential dependencies)
+   - Provides fair baseline for comparison
+
+This demonstrates that ESHA-256's multi-lane design enables SIMD
+parallelization that standard SHA-256's sequential design cannot achieve.
 ''',
     author='ESHA-256 Thesis Project',
     author_email='thesis@example.com',
-    ext_modules=[esha256_simd],
+    ext_modules=[esha256_simd, sha256_baseline, esha256_full, esha256_parallel],
     python_requires='>=3.8',
     classifiers=[
         'Development Status :: 4 - Beta',

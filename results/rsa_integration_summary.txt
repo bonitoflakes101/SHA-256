@@ -1,6 +1,6 @@
 RSA-PSS Integration Test Summary
 ==================================================
-Date: 2025-12-27 20:36:59
+Date: 2026-01-15 14:59:40
 Documents: 100
 RSA Key Size: 2048 bits
 Hash Algorithm: ESHA-256
@@ -11,7 +11,7 @@ Results:
   Tampers Detected: 100/100
 
 Performance:
-  Avg Signing Time: 2.62 ms
-  Avg Verification Time: 1.92 ms
+  Avg Signing Time: 2.10 ms
+  Avg Verification Time: 1.39 ms
 
 Conclusion: ESHA-256 + RSA-PSS suitable for medical signatures

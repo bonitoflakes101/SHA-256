@@ -1,13 +1,13 @@
 SASCA Resistance Test Summary
 ==================================================
-Date: 2025-12-27 20:34:05
+Date: 2026-01-15 14:58:49
 Power Traces: 10000
 
 Results:
-  SHA-256 Correlation:  ρ = 0.9755
-  ESHA-256 Correlation: ρ = 0.0066
+  SHA-256 Correlation:  ρ = 0.9761
+  ESHA-256 Correlation: ρ = 0.0037
 
-Leakage Reduction: 99.32%
+Leakage Reduction: 99.62%
 
 Conclusion:
   - SHA-256 shows high correlation (vulnerable to CPA)
